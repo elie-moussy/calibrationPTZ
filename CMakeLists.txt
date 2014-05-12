@@ -14,7 +14,7 @@ INCLUDE(cmake/base.cmake)
 INCLUDE(cmake/cpack.cmake)
 INCLUDE(cmake/lapack.cmake)
 
-SET(PROJECT_NAME math_tools)
+SET(PROJECT_NAME calibration)
 SET(PROJECT_DESCRIPTION "Calibrate a camera PTZ")
 SET(PROJECT_URL "http://github.com/elie-moussy/calibration")
 SET(PROJECT_VERSION 1.0)

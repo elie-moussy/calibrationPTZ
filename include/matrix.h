@@ -35,17 +35,9 @@ extern "C" {
 				     doublereal *, doublereal *, doublereal *, doublereal *, integer *,
 				     doublereal *, integer *, doublereal *, integer *, logical *, 
 				     integer *);
-  extern /* Subroutine */ int dtgevc_(const char* side, const char* howmny,
-				      const int* select, const int* n,
-				      const double* a, const int* lda,
-				      const double* b, const int* ldb,
-				      double* vl, const int* ldvl,
-				      double* vr, const int* ldvr,
-				      const int* mm, int* m, double* work, int* info);
 }
 
 bool GeneralizedSchur(Eigen::MatrixXd &A, Eigen::MatrixXd &B, Eigen::VectorXd &alphar, Eigen::VectorXd &alphai, Eigen::VectorXd &beta, Eigen::MatrixXd &L, Eigen::MatrixXd &R);
-bool QZFactorization(Eigen::MatrixXd &A, Eigen::MatrixXd &B, Eigen::VectorXd &alphar, Eigen::VectorXd &alphai, Eigen::VectorXd &beta, Eigen::MatrixXd &L, Eigen::MatrixXd &R, Eigen::MatrixXcd &H);
 int polyeig(Eigen::MatrixXd A0, Eigen::MatrixXd A1, Eigen::MatrixXd A2, Eigen::MatrixXd &H, Eigen::VectorXd &lambda);
 
 #endif // MATRIX_H_INCLUDED
