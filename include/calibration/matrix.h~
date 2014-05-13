@@ -35,9 +35,16 @@ extern "C" {
 				     doublereal *, doublereal *, doublereal *, doublereal *, integer *,
 				     doublereal *, integer *, doublereal *, integer *, logical *, 
 				     integer *);
+  void dgesvd_(char const* jobu, char const* jobvt,
+	       int const* m, int const* n, double* a, int const* lda,
+	       double* s, double* u, int const* ldu,
+	       double* vt, int const* ldvt,
+	       double* work, int const* lwork, int* info);
 }
 
 bool GeneralizedSchur(Eigen::MatrixXd &A, Eigen::MatrixXd &B, Eigen::VectorXd &alphar, Eigen::VectorXd &alphai, Eigen::VectorXd &beta, Eigen::MatrixXd &L, Eigen::MatrixXd &R);
 int polyeig(Eigen::MatrixXd A0, Eigen::MatrixXd A1, Eigen::MatrixXd A2, Eigen::MatrixXd &H, Eigen::VectorXd &lambda);
+int polyeig(Eigen::MatrixXd A0, Eigen::MatrixXd A1, Eigen::MatrixXd &H, Eigen::VectorXd &lambda);
+void pseudoInverse(Eigen::MatrixXd A, Eigen::MatrixXd inv, double threshold = 1e-6);
 
 #endif // MATRIX_H_INCLUDED

@@ -3,7 +3,7 @@
   * Author : Elie MOUSSY
 ***************************************/
 
-#include "matrix.h"
+#include "calibration/matrix.h"
 
 using namespace Eigen;
 using namespace std;
@@ -141,7 +141,7 @@ int polyeig(Eigen::MatrixXd A0, Eigen::MatrixXd A1, Eigen::MatrixXd A2, Eigen::M
       return ERROR_PGS;
     }
 
-  // Chose only the real eigenvalues
+  // Choose only the real eigenvalues
   int cnt = 0;
   for (int i=0; i<alphai.size(); i++)
     if (alphai(i)/beta(i) == 0)
@@ -167,4 +167,150 @@ int polyeig(Eigen::MatrixXd A0, Eigen::MatrixXd A1, Eigen::MatrixXd A2, Eigen::M
     }
   
   return 0;
+}
+
+///\fn int polyeig(Eigen::MatrixXd A0, Eigen::MatrixXd A1, Eigen::MatrixXd &H, Eigen::VectorXd &lambda);
+///\brief This function computes the real eigenvalues lambda and eigenvectors H in the following polynomial equation : (A0 + lambda*A1)*H = 0
+///\param A0 Input squared matrix.
+///\param A1 Input squared matrix with the same dimensions of A0.
+///\param H Output matrix that will be resized to the number of real eigenvectors found. On the output of this function, it will contain the real eigenvectors on its columns.
+///\param lambda Output vector that will be resized to the number of real eigenvalues found. On the output of this function, it will contain the real eigenvalues.
+///\return This function will return 0 if it is well executed. Otherwise, it will return:\n-ERROR_PSM if the matrices A0, A1 and/or A2 are not squared.\n-ERROR_PSDM if the matrices A0, A1 and A2 are not of the same dimensions.\n-ERROR_PGS if the function failed to cumpute the generalized Schur.\n-ERROR_PNRE if there is only complexe eigenvalues and eigenvectors computed.
+int polyeig(Eigen::MatrixXd A0, Eigen::MatrixXd A1, Eigen::MatrixXd &H, Eigen::VectorXd &lambda)
+{
+  int n = A0.rows();
+
+  if (A0.rows()!=A0.cols() && A1.rows()!=A1.cols())
+    {
+      cout << "A0 and A1 should be squared matrices" << endl;
+      return ERROR_PSM;
+    }
+
+  if (A1.rows()!=n)
+    {
+      cout << "A0 and A1 should be the same size" << endl;
+      return ERROR_PSDM;
+    }
+
+  // Use the JACOBI-DAVIDSON conversion
+  MatrixXd A, B;
+  A.resize(n,n);
+  A.setZero();
+  B.resize(n,n);
+  B.setZero();
+
+  A = -A0;
+  B = A1;
+
+   // Resolve Ax = lBx with x a vector and l a real scalar
+  VectorXd alphar, alphai, beta;
+  Eigen::MatrixXd L, R;
+  
+  if(!GeneralizedSchur(A,B,alphar,alphai,beta,L,R))
+    {
+      cout << "Failed to compute generalizedShur in polyeig" << endl;
+      return ERROR_PGS;
+    }
+
+  // Choose only the real eigenvalues
+  int cnt = 0;
+  for (int i=0; i<alphai.size(); i++)
+    if (alphai(i)/beta(i) == 0)
+      cnt++;
+  
+  if (cnt == 0)
+    {
+      cout << "Non real eigenvalues in polyeig" << endl;
+      return ERROR_PNRE;
+    }
+
+  lambda.resize(cnt);
+  H.resize(n, cnt);
+  cnt = 0;
+  for (int i=0; i<alphai.size(); i++)
+    {
+      if (alphai(i)/beta(i) == 0)
+	{
+	  lambda(cnt) = alphar(i)/beta(i);
+	  for (int j = 0; j < n; j++)
+	    H(j,cnt) = R(j,i);
+	}
+    }
+  
+  return 0;
+}
+
+///\func void pseudoInverse(Eigen::MatrixXd A, Eigen::MatrixXd &inv, double threshold = 1e-6);
+///\brief This function return the pseudo inverse of the matrix A.
+///\param A Input matrix from which this function computes the pseudo inverse.
+///\param inv Output matrix in which is stored the pseudo inverse of A.
+///\param threshold Input value that contains the value of the minimal eigenvalue accepted.
+void pseudoInverse(Eigen::MatrixXd A, Eigen::MatrixXd& inv, double threshold)
+{
+  bool toTranspose = false;
+
+  MatrixXd mat = A;
+
+  if (mat.rows() < mat.cols())
+    {
+      mat.transposeInPlace();
+      toTranspose = true;
+    }
+
+  const unsigned int NR = mat.rows();
+  const unsigned int NC = mat.rows();
+
+  MatrixXd U, VT;
+  U.resize(NR,NR);
+  U.setZero();
+  VT.resize(NC,NC);
+  VT.setZero();
+  VectorXd s;
+  s.resize(min(NR,NC));
+  s.setZero();
+  char Jobu='A';
+  char Jobvt='A';
+  const int m = NR;  
+  const int n = NC;
+  int linfo;
+  int lda = std::max(m,n);
+  int lw=-1;
+  {
+    double vw;
+    dgesvd_(&Jobu, &Jobvt, &m, &n,
+	    mat.data(), &lda,
+	    0, 0, &m, 0, &n, &vw, &lw, &linfo);
+    lw = int(vw)+5;
+  }
+  VectorXd w;
+  w.resize(lw);
+  w.setZero();
+  int lu = U.rows();
+  int lvt = VT.rows();
+  dgesvd_(&Jobu, &Jobvt, &m, &n,
+	  mat.data(), &lda,
+	  s.data(),
+	  U.data(),
+	  &lu,
+	  VT.data(), &lvt,
+	  w.data(), &lw, &linfo);
+
+  MatrixXd S;
+  S.resize(mat.cols(), mat.rows());
+  S.setZero();
+  for (int i=0;i<S.rows();i++)
+    {
+    for (int j=0; j<S.cols();j++)
+      {
+	if ((i==j) && (fabs(s(i))>threshold))
+	  S(i,i) = 1./s(i);
+	else
+	  S(i,j) = 0;
+      }
+    }
+  MatrixXd tmp1;
+  tmp1 = S*(U.transpose());
+  inv = (VT.transpose())*tmp1;
+  if (toTranspose)
+    inv.transposeInPlace();
 }
