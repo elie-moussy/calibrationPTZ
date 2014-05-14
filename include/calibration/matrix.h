@@ -42,6 +42,6 @@ extern "C" {
 bool GES(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::VectorXd &lambda, Eigen::MatrixXd &H);
 int polyeig(Eigen::MatrixXd A0, Eigen::MatrixXd A1, Eigen::MatrixXd A2, Eigen::MatrixXd &H, Eigen::VectorXd &lambda);
 int polyeig(Eigen::MatrixXd A0, Eigen::MatrixXd A1, Eigen::MatrixXd &H, Eigen::VectorXd &lambda);
-void pseudoInverse(Eigen::MatrixXd A, Eigen::MatrixXd& inv, double threshold = 1e-6);
+void pseudoInverse(Eigen::MatrixXd A, Eigen::MatrixXd& inv, double threshold = 1e-4);
 
 #endif // MATRIX_H_INCLUDED

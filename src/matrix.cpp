@@ -309,7 +309,7 @@ void pseudoInverse(Eigen::MatrixXd A, Eigen::MatrixXd& inv, double threshold)
     }
 
   const unsigned int NR = mat.rows();
-  const unsigned int NC = mat.rows();
+  const unsigned int NC = mat.cols();
 
   MatrixXd U, VT;
   U.resize(NR,NR);
@@ -349,9 +349,9 @@ void pseudoInverse(Eigen::MatrixXd A, Eigen::MatrixXd& inv, double threshold)
   MatrixXd S;
   S.resize(mat.cols(), mat.rows());
   S.setZero();
-  for (int i=0;i<S.rows();i++)
+  for (int i=0;i<mat.cols();i++)
     {
-    for (int j=0; j<S.cols();j++)
+    for (int j=0; j<mat.rows();j++)
       {
 	if ((i==j) && (fabs(s(i))>threshold))
 	  S(i,i) = 1./s(i);
