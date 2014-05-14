@@ -22,8 +22,15 @@ BOOST_AUTO_TEST_CASE (main_test)
   temp.noalias() -= I;
 
   bool results = true;
-  if (!temp.isApprox(Eigen::MatrixXd::Zero(10,10)))
-    results = false;
+  double eps = 1e-6;
+  for (int i = 0; i < temp.rows(); i++)
+    for (int j = 0; j < temp.cols(); j++)
+      if (temp(i,j)<0)
+	temp(i,j) = 0.-temp(i,j);
+  for (int i = 0; i < temp.rows(); i++)
+    for (int j = 0; j < temp.cols(); j++)
+      if (temp(i,j) > eps)
+	results = false;
 
-  std::cout << results;
+  BOOST_CHECK_EQUAL(results,true);
 }

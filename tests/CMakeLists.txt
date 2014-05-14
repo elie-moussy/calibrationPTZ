@@ -32,3 +32,9 @@ Endmacro(CALIBRATION_TEST)
 
 # pseudo inverse test
 CALIBRATION_TEST(testpseudoinverse)
+
+# polyeig1 test
+CALIBRATION_TEST(testpolyeig1)
+
+# polyeig2 test
+CALIBRATION_TEST(testpolyeig2)
