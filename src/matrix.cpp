@@ -64,7 +64,6 @@ bool GES(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::VectorXd &lambda, Eigen::M
   lambda.resize(cnt);
   H.resize(n,cnt);
   cnt = 0;
-  int imag = 0;
   for (int i=0; i<alphar.size()-1; i++)
     {
       if (alphai(i)/beta(i) == 0.)

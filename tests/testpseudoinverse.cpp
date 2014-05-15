@@ -10,7 +10,7 @@
 BOOST_AUTO_TEST_CASE (main_test)
 {
   Eigen::MatrixXd M;
-  M.resize(5,2);
+  M.resize(5,10);
   M.setRandom();
   Eigen::MatrixXd I = Eigen::MatrixXd::Identity(5,5);
 
