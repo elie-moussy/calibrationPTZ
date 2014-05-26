@@ -8,7 +8,8 @@
 # (at your option) any later version.
 
 SET(NEWHEADERS
-	${PROJECT_NAME}/matrix.h)
+	${PROJECT_NAME}/matrix.h
+	${PROJECT_NAME}/Calibration.h)
 
 INSTALL(FILES ${NEWHEADERS}
 	DESTINATION include/${PROJECT_NAME}
