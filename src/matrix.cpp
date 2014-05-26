@@ -3,7 +3,7 @@
   * Author : Elie MOUSSY
 ***************************************/
 
-#include "calibration/matrix.h"
+#include "calibrationPTZ/matrix.h"
 
 using namespace Eigen;
 using namespace std;
