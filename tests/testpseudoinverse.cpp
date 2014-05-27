@@ -5,7 +5,7 @@
 
 #define BOOST_TEST_MODULE pseudo-inverse
 #include <boost/test/unit_test.hpp>
-#include "calibrationPTZ/matrix.h"
+#include "calibrationPTZ/matrix.hh"
 
 BOOST_AUTO_TEST_CASE (main_test)
 {

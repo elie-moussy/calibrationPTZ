@@ -1,4 +1,4 @@
-#include "calibrationPTZ/Calibration.h"
+#include "calibrationPTZ/Calibration.hh"
 #include <math.h>
 #include <limits.h>
 

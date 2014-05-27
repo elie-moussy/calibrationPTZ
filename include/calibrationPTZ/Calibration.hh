@@ -1,5 +1,14 @@
+/***************************************
+  * Copyright (C) LAAS-CNRS
+  * Author : Elie MOUSSY
+***************************************/
+
 #ifndef CALIBRATION_H
 #define CALIBRATION_H
+
+///\file Calibration.h
+///\author Elie MOUSSY
+///\brief This file contains the class of calibration
 
 #include "controlPTZ/ControlPTZ.h"
 #include "controlPTZ/StreamRTSP.h"
@@ -9,7 +18,7 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/nonfree/features2d.hpp"
 #include "levmar/levmar.h"
-#include "matrix.h"
+#include "matrix.hh"
 #include <limits>
 #include <Eigen/Dense>
 #include <Eigen/LU>
@@ -23,9 +32,8 @@
 
 #define SETS_SIZE 10
 
-using namespace std;
-using namespace cv;
-
+///\struct SStream Calibration.h
+///\brief This structure allows to grab a frame from a source (in this case the camera)
 typedef struct
 {
 	StreamRTSP *stream;
@@ -33,6 +41,9 @@ typedef struct
 	pthread_mutex_t mutex_stock;
 }SStream;
 
+///\fn static void* pthread_img(void* stream);
+///\brief This function is a thread that grabs an image from a camera and storesit in an SStream structure.
+///\param stream A pointer to the SStream in which we want to store the image from the camera.
 static void* pthread_img(void* stream)
 {
 	SStream *str = (SStream *) stream;
@@ -45,6 +56,7 @@ static void* pthread_img(void* stream)
 	return NULL;
 }
 
+///\class Calibration Calibration.h
 class Calibration
 {
 	public :
@@ -55,8 +67,8 @@ class Calibration
 		void computeFocalLength(Eigen::Matrix3d* K0, double* fx, double* fy);
 		void computeZoomScaleDependence(double &af, double &bf, double &ak, double &bk, double &alpha, int stepZoom);
 		void nonLinearOptimization();
-		void computePTSet(Mat img, int i);
-		void computeZoomSet(Mat img, int i);
+		void computePTSet(cv::Mat img, int i);
+		void computeZoomSet(cv::Mat img, int i);
 		void computeCalibration();
 	  	~Calibration();
 
