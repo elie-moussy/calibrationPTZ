@@ -39,6 +39,7 @@ extern "C" {
 	      integer *, doublereal *, integer *, integer *);
 }
 
+double fRand(double fMin, double fMax);
 bool GES(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::VectorXd &lambda, Eigen::MatrixXd &H);
 int polyeig(Eigen::MatrixXd A0, Eigen::MatrixXd A1, Eigen::MatrixXd A2, Eigen::MatrixXd &H, Eigen::VectorXd &lambda);
 int polyeig(Eigen::MatrixXd A0, Eigen::MatrixXd A1, Eigen::MatrixXd &H, Eigen::VectorXd &lambda);

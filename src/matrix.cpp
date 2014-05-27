@@ -8,6 +8,12 @@
 using namespace Eigen;
 using namespace std;
 
+double fRand(double fMin, double fMax)
+{
+  double f = (double)rand() / RAND_MAX;
+  return fMin + f * (fMax - fMin);
+}
+
 ///\fn bool GES(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::VectorXd &lambda, Eigen::MatrixXd &H);
 ///\brief This function computes a generalized eigenvalue problem for two squared matrices A and B in order to get the real eigenvalues and the right eigenvectors.
 ///\param A Input squared matrix.
