@@ -801,41 +801,6 @@ void Calibration::nonLinearOptimization()
 	c(0) = P[6]; c(1) = P[7];
 }
 
-void Calibration::computeMechanicalError(double &perror, double &terror)
-{
-  double pan, tilt, panm, tiltm;
-  int z;
-  ControlPTZ ctrlPTZ;
-  srand(time(NULL));
-  perror = 0.;
-  terror = 0.;
-  for (int i = 0; i < 50; i++)
-    {
-      if (cam == 2)
-	{
-	  pan = fRand(-100, 100);//26;
-	  tilt = fRand(-100, 100); //3;
-	  ctrlPTZ.HTTPRequestPTZPosAbsolute(pan, tilt, 0, 2);
-	  cv::waitKey(1000);
-	  ctrlPTZ.refreshPosition(panm, tiltm, z, 2);
-	}
-      else
-	{
-	  pan = fRand(-100, 100);//132;
-	  tilt = fRand(-100, 100);//1.3;
-	  ctrlPTZ.HTTPRequestPTZPosAbsolute(pan, tilt, 0, 1);
-	  cv::waitKey(1000);
-	  ctrlPTZ.refreshPosition(panm, tiltm, z, 1);
-	}
-      perror += panm/pan;
-      terror += tiltm/tilt;
-    }
-  perror /= 50.;
-  terror /= 50.;
-  pan_error = perror;
-  tilt_error = terror;
-}
-
 //\fn void Calibration::MatchFeaturesZoom(std::vector<KeyPoint> &kp1, std::vector<KeyPoint> &kp2, int i, int j);
 ///\brief This function computes the features between two images of the zoom set using a surf detector.
 ///\param kp1 Output reference vector that contains the points detected on the first image (i).

@@ -70,7 +70,6 @@ public :
   void computePTSet(cv::Mat img, int i);
   void computeZoomSet(cv::Mat img, int i);
   void computeCalibration();
-  void computeMechanicalError(double &perror, double &terror);
   ~Calibration();
 
 private :
