@@ -1,3 +1,8 @@
+/***************************************
+  * Copyright (C) LAAS-CNRS
+  * Author : Elie MOUSSY
+***************************************/
+
 #include "calibrationPTZ/Calibration.hh"
 #include <math.h>
 #include <limits.h>

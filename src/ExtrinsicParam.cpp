@@ -1,7 +1,15 @@
+/***************************************
+  * Copyright (C) LAAS-CNRS
+  * Author : Elie MOUSSY
+***************************************/
+
 #include "calibrationPTZ/ExtrinsicParam.hh"
 
 #define PI 3.14159265
 
+//\fn ExtrinsicParam::ExtrinsicParam(int cam);
+///\brief The constructor of the class "ExtrinsicParam".
+///\param cam Indicates the camera number (1 or 2).
 ExtrinsicParam::ExtrinsicParam(int cam):
   pan(0.),
   tilt(0.),
@@ -30,16 +38,24 @@ ExtrinsicParam::ExtrinsicParam(int cam):
   translation.setZero();
 }
 
+//\fn ExtrinsicParam::~ExtrinsicParam();
+///\brief The destructor of the class "ExtrinsicParam".
 ExtrinsicParam::~ExtrinsicParam()
 {
   delete calib;
 }
 
+//\fn Eigen::Vector3d ExtrinsicParam::getTranslationVector();
+///\brief A getter function of the translation vector.
+///\return The 3D vector of translation.
 Eigen::Vector3d ExtrinsicParam::getTranslationVector()
 {
   return translation;
 }
 
+//\fn Eigen::Matrix3d ExtrinsicParam::getRotationMatrix();
+///\brief A getter function of the rotation matrix.
+///\return The 3x3 matrix of rotation.
 Eigen::Matrix3d ExtrinsicParam::getRotationMatrix()
 {
   if (rotation_computed)
@@ -50,12 +66,20 @@ Eigen::Matrix3d ExtrinsicParam::getRotationMatrix()
   return zero;
 }
 
+//\fn Eigen::Matrix3d ExtrinsicParam::getCameraMatrix();
+///\brief A getter function of the camera matrix (the intrinsic parameters).
+///\return The a 3x3 matrix of the camera calibration.
 Eigen::Matrix3d ExtrinsicParam::getCameraMatrix()
 {
   return K;
 }
 
-void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image/*, Eigen::Matrix3d K, double k0*/)
+//\fn void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image);
+///\brief This function computes the rotation matrix and the translation vector of the extrinsic parameters.
+///\param pan Value of the camera panoramique when the image has been taken.
+///\param tilt Value of the camera tilt when the image has been taken.
+///\param image The image from which the rotation matrix and the translation vector should be computed.
+void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
 {
   this->pan = pan;
   this->tilt = tilt;
@@ -250,6 +274,10 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image/*, E
   std::cout << "translation = " << translation << std::endl;
 }
 
+//\fn void ExtrinsicParam::changePanTilt(double pan, double tilt);
+///\brief This function computes the new rotation matrix and the new translation vector of the extrinsic parameters when the camera has changed its position.
+///\param pan Value of the new camera panoramique.
+///\param tilt Value of the new camera tilt.
 void ExtrinsicParam::changePanTilt(double pan, double tilt)
 {
   Eigen::Matrix3d Rx, Ry;
@@ -291,6 +319,8 @@ void ExtrinsicParam::changePanTilt(double pan, double tilt)
   this->tilt = tilt;
 }
 
+//\fn double ExtrinsicParam::getDistanceToPoint(cv::Point2f p);
+///\brief This function is depricated.
 double ExtrinsicParam::getDistanceToPoint(cv::Point2f p)
 {
   ControlPTZ ctrlPTZ;
@@ -317,6 +347,12 @@ double ExtrinsicParam::getDistanceToPoint(cv::Point2f p)
   return imgPz;
 }
 
+//\fn void ExtrinsicParam::getCameraPointFrom3d(Eigen::Vector3d realP, double &x, double &y, double &z);
+///\brief This function computes the coordinates of a 3D point from the real landmark to the one of the camera.
+///\param realP Value of the 3D point in the real landmark.
+///\param x Value of the 3D point in the camera landmark and on the x axis.
+///\param y Value of the 3D point in the camera landmark and on the y axis.
+///\param z Value of the 3D point in the camera landmark and on the z axis.
 void ExtrinsicParam::getCameraPointFrom3d(Eigen::Vector3d realP, double &x, double &y, double &z)
 {
   Eigen::Vector4d real;

@@ -1,3 +1,8 @@
+/***************************************
+  * Copyright (C) LAAS-CNRS
+  * Author : Elie MOUSSY
+***************************************/
+
 #ifndef EXTRINSICPARAM_H_INCLUDED
 #define EXTRINSICPARAM_H_INCLUDED
 
