@@ -61,7 +61,7 @@ class Calibration
 {
 public :
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  Calibration(int c, SStream *stream);
+  Calibration(int c);
   void computePrincipalPoint(double &cx, double &cy);
   void computeLensDistortion(double *k);
   void computeFocalLength(Eigen::Matrix3d* K0, double* fx, double* fy);
@@ -70,6 +70,8 @@ public :
   void computePTSet(cv::Mat img, int i);
   void computeZoomSet(cv::Mat img, int i);
   void computeCalibration();
+  Eigen::Matrix3d getCameraMatrix();
+  double getLensDistorsion();
   ~Calibration();
 
 private :
@@ -84,7 +86,7 @@ private :
   double *kz;
   double af, bf, ak, bk, alpha, pan_error, tilt_error;
   int cam;
-  SStream *str;
+  double intrinsicsComputed;
 };
 
 #endif

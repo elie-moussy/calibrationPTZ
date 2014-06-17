@@ -9,7 +9,8 @@
 
 SET(SOURCES
 	matrix.cpp
-	Calibration.cpp)
+	Calibration.cpp
+	ExtrinsicParam.cpp)
 
 ADD_LIBRARY(${PROJECT_NAME} SHARED ${SOURCES})
 

@@ -22,20 +22,23 @@ void MatToEigen3d(Mat m, Eigen::Matrix3d &e)
 ///\fn void MatToEigen3d(Mat m, Eigen::Matrix3d &e)Calibration::Calibration(int c);
 ///\brief This is the constructor of the class "Calibration".
 ///\param c Input parameter that specifies the camera number (1 or 2).
-Calibration::Calibration(int c, SStream* stream) :
-  cam(c)
+Calibration::Calibration(int c) :
+  cam(c),
+  intrinsicsComputed(false)
 {
   zoomSet = new Mat[SETS_SIZE]; 
   ptSet = new Mat[SETS_SIZE];
-  str = stream;
 }
 
 ///\fn void Calibration::~Calibration();
 ///\brief This is the destructor of the class "Calibration".
 Calibration::~Calibration()
 {
-  delete [] zoomSet;
-  delete [] ptSet;
+  if (intrinsicsComputed)
+    {
+      delete [] zoomSet;
+      delete [] ptSet;
+    }
 }
 
 ///\fn void Calibration::computePTSet(Mat img, int i);
@@ -91,12 +94,12 @@ void Calibration::computeCalibration()
   if (cam == 2)
     {
       ctrlPTZ.HTTPRequestPTZPosAbsolute(-31.8904, -20, 0, 2);
-      cv::waitKey(1000);
+      cv::waitKey(5000);
     }
   else
     {
       ctrlPTZ.HTTPRequestPTZPosAbsolute(140, -25, 0, 1);
-      cv::waitKey(1000);
+      cv::waitKey(5000);
     }
 
   pthread_t thread_img;
@@ -150,12 +153,12 @@ void Calibration::computeCalibration()
 	      if (cam == 2)
 		{
 		  ctrlPTZ.HTTPRequestPTZPosAbsolute(-31.8904, -20, 0, 2);
-		  cv::waitKey(1000);
+		  cv::waitKey(5000);
 		}
 	      else
 		{
 		  ctrlPTZ.HTTPRequestPTZPosAbsolute(140, -25, 0, 1);
-		  cv::waitKey(1000);
+		  cv::waitKey(5000);
 		}
 	      i=0;
 	    }
@@ -173,7 +176,7 @@ void Calibration::computeCalibration()
 	      cout << "Failed to compute the lens distortion." << endl;
 	      cout << endl << "Restarting the calibration..." << endl << endl;
 	      ctrlPTZ.HTTPRequestPTZPosAbsolute(-31.8904, -20, 0);
-	      cv::waitKey(1000);
+	      cv::waitKey(5000);
 	      i=0;
 	    }
 	  else
@@ -191,12 +194,12 @@ void Calibration::computeCalibration()
 	      if (cam == 2)
 		{
 		  ctrlPTZ.HTTPRequestPTZPosAbsolute(-31.8904, -20, 0, 2);
-		  cv::waitKey(1000);
+		  cv::waitKey(5000);
 		}
 	      else
 		{
 		  ctrlPTZ.HTTPRequestPTZPosAbsolute(140, -25, 0, 1);
-		  cv::waitKey(1000);
+		  cv::waitKey(5000);
 		}
 	      i=0;
 	    }
@@ -216,12 +219,12 @@ void Calibration::computeCalibration()
 	      if (cam == 2)
 		{
 		  ctrlPTZ.HTTPRequestPTZPosAbsolute(-31.8904, -20, 0, 2);
-		  cv::waitKey(1000);
+		  cv::waitKey(5000);
 		}
 	      else
 		{
 		  ctrlPTZ.HTTPRequestPTZPosAbsolute(140, -25, 0, 1);
-		  cv::waitKey(1000);
+		  cv::waitKey(5000);
 		}
 	      i=0;
 	    }
@@ -239,9 +242,28 @@ void Calibration::computeCalibration()
 	  cont = false;
 	}
     }
+  intrinsicsComputed = true;
   pthread_cancel(thread_img);
   pthread_join(thread_img, NULL);
   delete stream.stream;
+}
+
+///\fn Eigen::Matrix3d Calibration::getCameraMatrix();
+///\brief This function of the class "Calibration" computes the camera matrix of intrinsic parameters. If these parameters are not computed, this function calls "computeCalibration()".
+///\return The camera matrix.
+Eigen::Matrix3d Calibration::getCameraMatrix()
+{
+  if (!intrinsicsComputed)
+    computeCalibration();
+
+  Eigen::Matrix3d K;
+  K.setZero();
+  K(0,0) = fx[0]*1000;
+  K(1,1) = fy[0]*1000;
+  K(0,2) = c(0);
+  K(1,2) = c(1);
+  K(2,2) = 1;
+  return K;
 }
 
 ///\fn void Calibration::computePrincipalPoint(double &cx, double &cy);
@@ -809,37 +831,42 @@ void Calibration::nonLinearOptimization()
 ///\param j Input variable containing the number of the second image.
 void Calibration::MatchFeaturesZoom(std::vector<KeyPoint> &kp1, std::vector<KeyPoint> &kp2, int i, int j)
 {
-	//-- Step 1: Detect keypoints using a Surf detector
-	int minHessian = 400;
+  if (!kp1.empty())
+    kp1.clear();
+  if (!kp2.empty())
+    kp2.clear();
 
-	SurfFeatureDetector detector( minHessian );
+  //-- Step 1: Detect keypoints using a Surf detector
+  int minHessian = 400;
 
-	std::vector<KeyPoint> keypoints_1, keypoints_2;
-	Mat grey1, grey2;
-	cvtColor(ptSet[i], grey1, CV_RGB2GRAY);
-	cvtColor(ptSet[j], grey2, CV_RGB2GRAY);
+  SurfFeatureDetector detector( minHessian );
 
-	detector.detect( grey1, keypoints_1 );
-	detector.detect( grey2, keypoints_2 );
+  std::vector<KeyPoint> keypoints_1, keypoints_2;
+  Mat grey1, grey2;
+  cvtColor(ptSet[i], grey1, CV_RGB2GRAY);
+  cvtColor(ptSet[j], grey2, CV_RGB2GRAY);
 
-	//-- Step 2: Calculate descriptors (feature vectors)
-	SurfDescriptorExtractor extractor;
+  detector.detect( grey1, keypoints_1 );
+  detector.detect( grey2, keypoints_2 );
 
-	Mat descriptors_1, descriptors_2;
+  //-- Step 2: Calculate descriptors (feature vectors)
+  SurfDescriptorExtractor extractor;
 
-	extractor.compute( zoomSet[i], keypoints_1, descriptors_1 );
-	extractor.compute( zoomSet[j], keypoints_2, descriptors_2 );
+  Mat descriptors_1, descriptors_2;
 
-	//-- Step 3: Matching descriptor vectors using FLANN matcher
-	FlannBasedMatcher matcher;
-	std::vector< DMatch > matches;
-	matcher.match( descriptors_1, descriptors_2, matches );
+  extractor.compute( zoomSet[i], keypoints_1, descriptors_1 );
+  extractor.compute( zoomSet[j], keypoints_2, descriptors_2 );
 
-	for( int i = 0; i < (int)matches.size(); i++ )
-  	{
-	  kp1.push_back(keypoints_1[matches[i].queryIdx]);
-	  kp2.push_back(keypoints_2[matches[i].trainIdx]);
-	}
+  //-- Step 3: Matching descriptor vectors using FLANN matcher
+  FlannBasedMatcher matcher;
+  std::vector< DMatch > matches;
+  matcher.match( descriptors_1, descriptors_2, matches );
+
+  for( int i = 0; i < (int)matches.size(); i++ )
+    {
+      kp1.push_back(keypoints_1[matches[i].queryIdx]);
+      kp2.push_back(keypoints_2[matches[i].trainIdx]);
+    }
 }
 
 //\fn void Calibration::MatchFeaturesPT(std::vector<KeyPoint> &kp1, std::vector<KeyPoint> &kp2, int i, int j);
@@ -850,36 +877,36 @@ void Calibration::MatchFeaturesZoom(std::vector<KeyPoint> &kp1, std::vector<KeyP
 ///\param j Input variable containing the number of the second image.
 void Calibration::MatchFeaturesPT(std::vector<KeyPoint> &kp1, std::vector<KeyPoint> &kp2, int i, int j)
 {
-	//-- Step 1: Detect keypoints using a Surf detector
-	int minHessian = 400;
+  //-- Step 1: Detect keypoints using a Surf detector
+  int minHessian = 400;
 
-	SurfFeatureDetector detector( minHessian );
+  SurfFeatureDetector detector( minHessian );
 
-	std::vector<KeyPoint> keypoints_1, keypoints_2;
-	Mat grey1, grey2;
-	cvtColor(ptSet[i], grey1, CV_RGB2GRAY);
-	cvtColor(ptSet[j], grey2, CV_RGB2GRAY);
+  std::vector<KeyPoint> keypoints_1, keypoints_2;
+  Mat grey1, grey2;
+  cvtColor(ptSet[i], grey1, CV_RGB2GRAY);
+  cvtColor(ptSet[j], grey2, CV_RGB2GRAY);
 
-	detector.detect( grey1, keypoints_1 );
-	detector.detect( grey2, keypoints_2 );
+  detector.detect( grey1, keypoints_1 );
+  detector.detect( grey2, keypoints_2 );
 
-	//-- Step 2: Calculate descriptors (feature vectors)
-	SurfDescriptorExtractor extractor;
+  //-- Step 2: Calculate descriptors (feature vectors)
+  SurfDescriptorExtractor extractor;
 
-	Mat descriptors_1, descriptors_2;
+  Mat descriptors_1, descriptors_2;
 
-	extractor.compute( ptSet[i], keypoints_1, descriptors_1 );
-	extractor.compute( ptSet[j], keypoints_2, descriptors_2 );
+  extractor.compute( ptSet[i], keypoints_1, descriptors_1 );
+  extractor.compute( ptSet[j], keypoints_2, descriptors_2 );
 
-	//-- Step 3: Matching descriptor vectors using FLANN matcher
-	FlannBasedMatcher matcher;
-	std::vector< DMatch > matches;
-	matcher.match( descriptors_1, descriptors_2, matches );
+  //-- Step 3: Matching descriptor vectors using FLANN matcher
+  FlannBasedMatcher matcher;
+  std::vector< DMatch > matches;
+  matcher.match( descriptors_1, descriptors_2, matches );
 
-	for( int i = 0; i < (int)matches.size(); i++ )
-  	{
-	  kp1.push_back(keypoints_1[matches[i].queryIdx]);
-	  kp2.push_back(keypoints_2[matches[i].trainIdx]);
-	}
+  for( int i = 0; i < (int)matches.size(); i++ )
+    {
+      kp1.push_back(keypoints_1[matches[i].queryIdx]);
+      kp2.push_back(keypoints_2[matches[i].trainIdx]);
+    }
 }
 

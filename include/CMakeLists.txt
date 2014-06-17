@@ -9,7 +9,8 @@
 
 SET(NEWHEADERS
 	${PROJECT_NAME}/matrix.hh
-	${PROJECT_NAME}/Calibration.hh)
+	${PROJECT_NAME}/Calibration.hh
+	${PROJECT_NAME}/ExtrinsicParam.hh)
 
 INSTALL(FILES ${NEWHEADERS}
 	DESTINATION include/${PROJECT_NAME}
