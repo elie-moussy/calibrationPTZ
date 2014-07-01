@@ -17,22 +17,32 @@ ExtrinsicParam::ExtrinsicParam(int cam):
 {
   this->cam = cam;
   calib = new Calibration(cam);
-  //K = calib->getCameraMatrix();
+  dist.resize(5);
   K.setZero();
   if (cam == 2)
     {
-      K(0,0) = 821;
-      K(1,1) = 688;
+      K(0,0) = 800;
+      K(1,1) = 600;
       K(2,2) = 1;
       K(0,2) = 399.92;
       K(1,2) = 234.501;
+      dist << -0.113323,
+	-0.023496,
+	-0.013891,
+	-0.003838,
+	0.267853;
     } else if (cam == 1)
     {
-      K(0,0) = 800;//455;
-      K(1,1) = 600;//355;
+      K(0,0) = 800;
+      K(1,1) = 600;
       K(2,2) = 1;
       K(0,2) = 322.114;
       K(1,2) = 217.173;
+      dist << -0.133553,
+	0.078593,
+	0.001123,
+	0.001457,
+	-0.043746;
     }
   rotation.setZero();
   translation.setZero();
@@ -81,32 +91,30 @@ Eigen::Matrix3d ExtrinsicParam::getCameraMatrix()
 ///\param image The image from which the rotation matrix and the translation vector should be computed.
 void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
 {
+  // Save the value of the pan and the tilt in order to modify the extrinsic parameters when the camera position change
   this->pan = pan;
   this->tilt = tilt;
   cv::Mat img = image.clone();
   cv::Mat initImg = image.clone();
   int cnt = 0;
 
-  //Eigen::Matrix3d K = calib->getCameraMatrix();
   double fx = K(0,0), fy = K(1,1), cx = K(0,2), cy = K(1,2);
-  double k0;//= calib->getLensDistorsion();
-  if (cam == 1)
-    k0 = -0.08;
-  if (cam == 2)
-    k0 = 0.08;
   double u, v, x, y;
+  double dist_to_point;
 
   pp.cnt = 0;
 
+  // Create a window of the scene
   cv::namedWindow("Extrinsic Image",CV_WINDOW_AUTOSIZE);
   cvSetMouseCallback("Extrinsic Image",On_Mouse,0);
   cv::waitKey(10);
   cv::imshow("Extrinsic Image", img);
   cv::waitKey(10);
 
+  // We need 4 points to compute the translation vector and the rotation matrix
   while (pp.cnt <= 4)
     {
-      if (cnt > pp.cnt)
+      if (cnt > pp.cnt) // Case where we do a right click in order to remove the last point inserted
 	{
 	  switch (cnt)
 	    {
@@ -121,7 +129,7 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
 	      {
 		img = image.clone();
 		cv::circle(img,pp.p1[0],3,cv::Scalar(255,0,0));
-		cv::putText(img,"(0,0,0)",pp.p1[1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::putText(img,"(0,0,0)",pp.p1[0],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
 		cnt = pp.cnt;
 	      }
 	      break;
@@ -130,9 +138,9 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
 	      {
 		img = image.clone();
 		cv::circle(img,pp.p1[0],3,cv::Scalar(255,0,0));
-		cv::putText(img,"(0,0,0)",pp.p1[1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::putText(img,"(0,0,0)",pp.p1[0],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
 		cv::circle(img,pp.p1[1],3,cv::Scalar(255,0,0));
-		cv::putText(img,"(0.5,0,0)",pp.p1[2],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::putText(img,"(0.5,0,0)",pp.p1[1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
 		cnt = pp.cnt;
 	      }
 	      break;
@@ -141,11 +149,11 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
 	      {
 		img = image.clone();
 		cv::circle(img,pp.p1[0],3,cv::Scalar(255,0,0));
-		cv::putText(img,"(0,0,0)",pp.p1[1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::putText(img,"(0,0,0)",pp.p1[0],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
 		cv::circle(img,pp.p1[1],3,cv::Scalar(255,0,0));
-		cv::putText(img,"(0.5,0,0)",pp.p1[2],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::putText(img,"(0.5,0,0)",pp.p1[1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
 		cv::circle(img,pp.p1[2],3,cv::Scalar(255,0,0));
-		cv::putText(img,"(0,0.5,0)",pp.p1[3],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::putText(img,"(0,0.5,0)",pp.p1[2],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
 		cnt = pp.cnt;
 	      }
 	      break;
@@ -156,122 +164,109 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
 	  cv::imshow("Extrinsic Image", img);
 	  cv::waitKey(10);
 	}
-      if (pp.clicked)
+      if (pp.clicked) // Case where we do a left click in order to insert a point
 	{
 	  cv::circle(img,pp.p1[pp.cnt-1],3,cv::Scalar(255,0,0));
 	  
-	  if (pp.cnt == 1)
+	  if (pp.cnt == 1) // First point to insert (0,0,0) (on the mocap basis)
 	    {
 	      cv::putText(img,"(0,0,0)",pp.p1[pp.cnt-1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
-	      u = pp.p1[0].x;
-	      v = pp.p1[0].y;
+	      // Get the image coordinates
+	      u = (pp.p1[0].x - cx)/fx;
+	      v = (pp.p1[0].y - cy)/fy;
 	      
+	      // Get the distance between the camera and the 3d point (the scale s)
 	      if (cam == 1)
 		{
-		  double dist_to_point = DIST_TO_000_CAM1;//= getDistanceToPoint(pp.p1[0]);
-		  translation(0) = (u-cx)*/*DIST_TO_000_CAM1*/(dist_to_point)/fx;
-		  translation(1) = (v-cy)*/*DIST_TO_000_CAM1*/(dist_to_point)/fy;
-		  translation(2) = dist_to_point;//DIST_TO_000_CAM1;
+		  dist_to_point = DIST_TO_000_CAM1;
 		}
-	      if (cam == 2)
+	      else if (cam == 2)
 		{
-		  double dist_to_point= DIST_TO_000_CAM2;//= getDistanceToPoint(pp.p1[0]);
-		  translation(0) = (u-cx)*/*DIST_TO_000_CAM2*/dist_to_point/(fx);
-		  translation(1) = (v-cy)*/*DIST_TO_000_CAM2*/dist_to_point/(fy);
-		  translation(2) = dist_to_point;//DIST_TO_000_CAM2;
+		  dist_to_point= DIST_TO_000_CAM2;
 		}
-	    } else if (pp.cnt == 2)
+	      
+	      // The first point inserted will help to compute the translation vector
+	      translation(0) = (u)*(dist_to_point);
+	      translation(1) = (v)*(dist_to_point);
+	      translation(2) = dist_to_point;
+
+	    } else if (pp.cnt == 2) // Second point to insert (500mm,0,0) (on the mocap basis)
 	    {
 	      cv::putText(img,"(0.5,0,0)",pp.p1[pp.cnt-1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
-	      u = pp.p1[1].x - cx;
-	      v = pp.p1[1].y - cy;
-	      double uu, vu;
-	      uu = u/(1. + k0);
-	      vu = v/(1. + k0);
+	      u = (pp.p1[1].x - cx)/fx;
+	      v = (pp.p1[1].y - cy)/fy;
 	      
 	      if (cam == 1)
 		{
-		  double dist_to_point = DIST_TO_0500_CAM1;//getDistanceToPoint(pp.p1[1]);
-		  x = (uu)*(dist_to_point)/*DIST_TO_0500_CAM1*//fx;
-		  y = (vu)*(dist_to_point)/*DIST_TO_0500_CAM1*//fy;
-		  rotation(0,0) = (x - translation(0)) / 500.;
-		  rotation(1,0) = (y - translation(1)) / 500.;
-		  rotation(2,0) = (/*DIST_TO_0500_CAM1*/dist_to_point - translation(2)) / 500.;
-		}
-	      if (cam ==2)
-		{
-		  double dist_to_point = DIST_TO_0500_CAM2;//getDistanceToPoint(pp.p1[1]);
-		  x = (uu)*/*DIST_TO_0500_CAM2*/dist_to_point/fx;
-		  y = (vu)*/*DIST_TO_0500_CAM2*/dist_to_point/fy;
-		  rotation(0,0) = (x - translation(0)) / 500.;
-		  rotation(1,0) = (y - translation(1)) / 500.;
-		  rotation(2,0) = (/*DIST_TO_0500_CAM2*/dist_to_point - translation(2)) / 500.;
-		}
-	    } else if (pp.cnt == 3)
-	    {
-	      cv::putText(img,"(0,0.5,0)",pp.p1[pp.cnt-1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
-	      u = pp.p1[2].x - cx;
-	      v = pp.p1[2].y -cy;
-	      double uu, vu;
-	      uu = u/(1. + k0);
-	      vu = v/(1. + k0);
-	      
-	      if (cam == 1)
-		{
-		  double dist_to_point = DIST_TO_0050_CAM1;//getDistanceToPoint(pp.p1[2]);
-		  x = (uu)*/*DIST_TO_0050_CAM1*/(dist_to_point)/fx;
-		  y = (vu)*/*DIST_TO_0050_CAM1*/(dist_to_point)/fy;
-		  rotation(0,1) = (x - translation(0)) / 500.;
-		  rotation(1,1) = (y - translation(1)) / 500.;
-		  rotation(2,1) = (/*DIST_TO_0050_CAM1*/dist_to_point - translation(2)) / 500.;
-		}
-	      if (cam ==2)
-		{
-		  double dist_to_point = DIST_TO_0050_CAM2;//getDistanceToPoint(pp.p1[2]);
-		  x = (uu)*/*DIST_TO_0050_CAM2*/dist_to_point/fx;
-		  y = (vu)*/*DIST_TO_0050_CAM2*/dist_to_point/fy;
-		  rotation(0,1) = (x - translation(0)) / 500.;
-		  rotation(1,1) = (y - translation(1)) / 500.;
-		  rotation(2,1) = (/*DIST_TO_0050_CAM2*/dist_to_point - translation(2)) / 500.;
-		}
-	    } else if (pp.cnt == 4)
-	    {
-	      cv::putText(img,"(0,0,1)",pp.p1[pp.cnt-1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
-	      u = pp.p1[3].x - cx;
-	      v = pp.p1[3].y - cy;
-	      double uu, vu;
-	      uu = u/(1. + k0);
-	      vu = v/(1. + k0);
-	      
-	      if (cam == 1)
-		{
-		  double dist_to_point = DIST_TO_001_CAM1;//getDistanceToPoint(pp.p1[3]);
-		  x = (uu)*/*DIST_TO_001_CAM1*/(dist_to_point)/fx;
-		  y = (vu)*/*DIST_TO_001_CAM1*/(dist_to_point)/fy;
-		  rotation(0,2) = (x - translation(0)) / 1000.;
-		  rotation(1,2) = (y - translation(1)) / 1000.;
-		  rotation(2,2) = (/*DIST_TO_001_CAM1*/(dist_to_point) - translation(2)) / 1000.;
+		  dist_to_point = DIST_TO_0500_CAM1;
 		}
 	      if (cam == 2)
 		{
-		  double dist_to_point = DIST_TO_001_CAM2;//getDistanceToPoint(pp.p1[3]);
-		  x = (uu)*/*DIST_TO_001_CAM2*/dist_to_point/fx;
-		  y = (vu)*/*DIST_TO_001_CAM2*/dist_to_point/fy;
-		  rotation(0,2) = (x - translation(0)) / 1000.;
-		  rotation(1,2) = (y - translation(1)) / 1000.;
-		  rotation(2,2) = (/*DIST_TO_001_CAM2*/dist_to_point - translation(2)) / 1000.;
+		  dist_to_point = DIST_TO_0500_CAM2;
 		}
+
+	      x = (u)*(dist_to_point);
+	      y = (v)*(dist_to_point);
+
+	      rotation(0,0) = (x - translation(0)) / 500.;
+	      rotation(1,0) = (y - translation(1)) / 500.;
+	      rotation(2,0) = (dist_to_point - translation(2)) / 500.;
+
+	    } else if (pp.cnt == 3) // Third point to insert (0,500mm,0) (on the mocap basis)
+	    {
+	      cv::putText(img,"(0,0.5,0)",pp.p1[pp.cnt-1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+	      u = (pp.p1[2].x - cx)/fx;
+	      v = (pp.p1[2].y - cy)/fy;
+	      
+	      if (cam == 1)
+		{
+		  dist_to_point = DIST_TO_0050_CAM1;
+		}
+	      if (cam == 2)
+		{
+		  dist_to_point = DIST_TO_0050_CAM2;
+		}
+	      x = (u)*(dist_to_point);
+	      y = (v)*(dist_to_point);
+
+	      rotation(0,1) = (x - translation(0)) / 500.;
+	      rotation(1,1) = (y - translation(1)) / 500.;
+	      rotation(2,1) = (dist_to_point - translation(2)) / 500.;
+
+	    } else if (pp.cnt == 4) // Fourth point to insert (0,0,1000mm) (on the mocap basis)
+	    {
+	      cv::putText(img,"(0,0,1)",pp.p1[pp.cnt-1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+	      u = (pp.p1[3].x - cx)/fx;
+	      v = (pp.p1[3].y - cy)/fy;
+	      
+	      if (cam == 1)
+		{
+		  dist_to_point = DIST_TO_001_CAM1;
+		}
+	      if (cam == 2)
+		{
+		  dist_to_point = DIST_TO_001_CAM2;
+		}
+
+	      x = (u)*(dist_to_point);
+	      y = (v)*(dist_to_point);
+
+	      rotation(0,2) = (x - translation(0)) / 1000.;
+	      rotation(1,2) = (y - translation(1)) / 1000.;
+	      rotation(2,2) = ((dist_to_point) - translation(2)) / 1000.;
 	    }
 	  cnt = pp.cnt;
 	  pp.clicked = false;
 	}
+      // Keep showing the image and the modification on it
       cv::imshow("Extrinsic Image", img);
       cv::waitKey(10);
     }
+
   rotation_computed = true;
 
-  std::cout << "rotation = " << rotation << std::endl;
-  std::cout << "translation = " << translation << std::endl;
+  // Destroy the window
+  cv::destroyWindow("Extrinsic Image");
 }
 
 //\fn void ExtrinsicParam::changePanTilt(double pan, double tilt);
@@ -280,71 +275,35 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
 ///\param tilt Value of the new camera tilt.
 void ExtrinsicParam::changePanTilt(double pan, double tilt)
 {
+  // Compute the rotation matrices with the new values of pan and tilt
   Eigen::Matrix3d Rx, Ry;
   Rx.setZero();
   Ry.setZero();
   Rx(0,0) = 1;
-  Rx(1,1) = cos((tilt - this->tilt)*PI/180.);
-  Rx(1,2) = -sin((tilt - this->tilt)*PI/180.);
-  Rx(2,1) = sin((tilt - this->tilt)*PI/180.);
-  Rx(2,2) = cos((tilt - this->tilt)*PI/180.);
-  Ry(0,0) = cos((pan - this->pan)*PI/180.);
-  Ry(0,2) = sin((pan - this->pan)*PI/180.);
+  Rx(1,1) = cos((-(tilt-this->tilt))*PI/180.);
+  Rx(1,2) = -sin((-(tilt-this->tilt))*PI/180.);
+  Rx(2,1) = sin((-(tilt-this->tilt))*PI/180.);
+  Rx(2,2) = cos((-(tilt-this->tilt))*PI/180.);
+  Ry(0,0) = cos((-(pan-this->pan))*PI/180.);
+  Ry(0,2) = sin((-(pan-this->pan))*PI/180.);
   Ry(1,1) = 1;
-  Ry(2,0) = -sin((pan - this->pan)*PI/180.);
-  Ry(2,2) = cos((pan - this->pan)*PI/180.);
+  Ry(2,0) = -sin((-(pan-this->pan))*PI/180.);
+  Ry(2,2) = cos((-(pan-this->pan))*PI/180.);
 
-  //Eigen::Matrix3d K = calib->getCameraMatrix();
-  double dist_to_point = getDistanceToPoint(pp.p1[3]);
-  std::cout << "t before =\n" << translation << std::endl;
-  if (cam == 1)
-    {
-      translation(0) = translation(0)*K(0,0)/dist_to_point;//DIST_TO_000_CAM1;
-      translation(0) = (translation(0) - 10*(pan - this->pan))*/*DIST_TO_000_CAM1*/dist_to_point/K(0,0);
-      translation(1) = translation(1)*K(1,1)/dist_to_point;//DIST_TO_000_CAM1;
-      translation(1) = (translation(1) + 12*(tilt - this->tilt))*/*DIST_TO_000_CAM1*/dist_to_point/K(1,1);
-    }
-  if (cam == 2)
-    {
-      translation(0) = translation(0)*K(0,0)/dist_to_point;//DIST_TO_000_CAM2;
-      translation(0) = (translation(0) - 10.5*(pan - this->pan))*/*DIST_TO_000_CAM2*/dist_to_point/K(0,0);
-      translation(1) = translation(1)*K(1,1)/dist_to_point;//DIST_TO_000_CAM2;
-      translation(1) = (translation(1) + 10*(tilt - this->tilt))*/*DIST_TO_000_CAM2*/dist_to_point/K(1,1);
-    }
-  std::cout << "t after =\n" << translation << std::endl;
-
-  rotation = Rx*Ry*rotation;
-
-  this->pan = pan;
-  this->tilt = tilt;
-}
-
-//\fn double ExtrinsicParam::getDistanceToPoint(cv::Point2f p);
-///\brief This function is depricated.
-double ExtrinsicParam::getDistanceToPoint(cv::Point2f p)
-{
-  ControlPTZ ctrlPTZ;
-  double pan, tilt;
-  double imgPz = 0.;
-  int z;
-  const double dist_c1_c2 = 8490.;
-
-  if (cam == 1)
-    {
-      ctrlPTZ.refreshPosition(pan,tilt,z,1);
-      pan += ((p.x)-704/2)/10;
-      tilt += -((p.y)-576/2)/12;
-      imgPz = sqrt((dist_c1_c2*cos((pan)*3.14/180.)*dist_c1_c2*cos((pan)*3.14/180.)) + (dist_c1_c2*sin((tilt)*3.14/180.)*dist_c1_c2*sin((tilt)*3.14/180.)));
-    }
-  else if (cam == 2)
-    {
-      ctrlPTZ.refreshPosition(pan,tilt,z,2);
-      pan += ((p.x)-704/2)/11.5 + 35;
-      tilt += -((p.y)-576/2)/10;
-      imgPz = sqrt((dist_c1_c2*cos((pan)*3.14/180.)*dist_c1_c2*cos((pan)*3.14/180.)) + (dist_c1_c2*sin((tilt)*3.14/180.)*dist_c1_c2*sin((tilt)*3.14/180.)));
-    }
-  
-  return imgPz;
+  // Compute the new values of the extrinsic parameters
+  Eigen::Matrix4d Rx1, Ry1, Rt;
+  Rt << rotation, translation,
+    0,0,0,1;
+  Rx1 << Rx, Eigen::Vector3d::Zero(),
+    0,0,0,1;
+  Ry1 << Ry, Eigen::Vector3d::Zero(),
+    0,0,0,1;
+  Rt.noalias() = Rx1*Ry1*Rt;
+  rotation(0,0) = Rt(0,0);rotation(0,1) = Rt(0,1);rotation(0,2) = Rt(0,2);
+  rotation(1,0) = Rt(1,0);rotation(1,1) = Rt(1,1);rotation(1,2) = Rt(1,2);
+  rotation(2,0) = Rt(2,0);rotation(2,1) = Rt(2,1);rotation(2,2) = Rt(2,2);
+  translation(0) = Rt(0,3);
+  translation(1) = Rt(1,3);
 }
 
 //\fn void ExtrinsicParam::getCameraPointFrom3d(Eigen::Vector3d realP, double &x, double &y, double &z);
@@ -352,26 +311,92 @@ double ExtrinsicParam::getDistanceToPoint(cv::Point2f p)
 ///\param realP Value of the 3D point in the real landmark.
 ///\param x Value of the 3D point in the camera landmark and on the x axis.
 ///\param y Value of the 3D point in the camera landmark and on the y axis.
-///\param z Value of the 3D point in the camera landmark and on the z axis.
+///\param z Value of the distance between the camera and the 3D point (the scale).
 void ExtrinsicParam::getCameraPointFrom3d(Eigen::Vector3d realP, double &x, double &y, double &z)
 {
   Eigen::Vector4d real;
   real << realP,
           1;
-  
+  double fx = K(0,0), fy = K(1,1), cx = K(0,2), cy = K(1,2);  
   Eigen::Vector3d imgP;
   Eigen::MatrixXd Rt;
   Rt.resize(3,4);
   Rt << rotation,translation;
-  imgP = K*Rt*real;
-  if (cam == 1)
-    {
-      x = imgP(0)/imgP(2) + (imgP(0)/imgP(2) - K(0,2))*(-0.08);
-      y = imgP(1)/imgP(2) + (imgP(1)/imgP(2) - K(1,2))*(-0.08);
-    } else if (cam == 2)
-    {
-      x = imgP(0)/imgP(2) + (imgP(0)/imgP(2) - K(0,2))*(0.08);
-      y = imgP(1)/imgP(2) + (imgP(1)/imgP(2) - K(1,2))*(0.08);
-    }
+  imgP.noalias() = K*Rt*real;
   z = imgP(2);
+  imgP.noalias() = imgP/imgP(2);
+  imgP.noalias() = undistortPoint(imgP);
+  imgP(0) = imgP(0)*fx + cx;
+  imgP(1) = imgP(1)*fy + cy;
+  x = imgP(0);
+  y = imgP(1);
+}
+
+//\fn Eigen::Vector3d ExtrinsicParam::undistortPoint(Eigen::Vector3d distortedPoint);
+///\brief This function undistorts a distorted point on the image coordinates. After calling this function, the first value of the returned vector should be multiplied by fx and added to cx and the second value should be multiplied by fy and added to cy.
+///\param distortedPoint the distorted point to undistort.
+///\return The value of the undistorted point in the image coordinates.
+Eigen::Vector3d ExtrinsicParam::undistortPoint(Eigen::Vector3d distortedPoint)
+{
+  Eigen::Vector3d res;
+  
+  // Convert the camera matrix to an OpenCV matrix
+  cv::Mat K1(3,3,CV_64F);
+  K1.at<double>(0,0) = K(0,0);
+  K1.at<double>(0,1) = K(0,1);
+  K1.at<double>(0,2) = K(0,2);
+  K1.at<double>(1,0) = K(1,0);
+  K1.at<double>(1,1) = K(1,1);
+  K1.at<double>(1,2) = K(1,2);
+  K1.at<double>(2,0) = K(2,0);
+  K1.at<double>(2,1) = K(2,1);
+  K1.at<double>(2,2) = K(2,2);
+
+  // Convert the distortion vector to an OpenCV vector
+  cv::Mat distCoeffs(5,1,CV_64F);
+  distCoeffs.at<double>(0,0) = dist(0);
+  distCoeffs.at<double>(1,0) = dist(1);
+  distCoeffs.at<double>(2,0) = dist(2);
+  distCoeffs.at<double>(3,0) = dist(3);
+  distCoeffs.at<double>(4,0) = dist(4);
+
+  // Convert the distorted point vector to an OpenCV vector
+  cv::Mat src(1,1,CV_64FC2);
+  src.at<double>(0,0) = distortedPoint(0);
+  src.at<double>(0,1) = distortedPoint(1);
+  cv::Mat dst;
+
+  // Undistort the point
+  cv::undistortPoints(src, dst, K1, distCoeffs);
+
+  // Fill the undistorted point vector and return it
+  res(0) = dst.at<double>(0,0);
+  res(1) = dst.at<double>(0,1);
+  res(2) = 1.;
+  return res;
+}
+
+//\fn Eigen::Vector3d ExtrinsicParam::distortPoint(Eigen::Vector3d undistortedPoint);
+///\brief This function distorts an undistorted point on the image coordinates. Before calling this function, the first value of "undistortedPoint" vector should be minused by cx and the whole divided by fx. Besides, the second value of this vector should be minused by cy and the whole divided by fy.
+///\param undistortedPoint The undistorted point to distort.
+///\return The value of the distorted point in the image coordinates.
+Eigen::Vector3d ExtrinsicParam::distortPoint(Eigen::Vector3d undistortedPoint)
+{
+  Eigen::Vector3d res = undistortedPoint;
+  double r2 = res(0)*res(0) + res(1)*res(1);
+  double k1 = dist(0), k2 = dist(1), p1 = dist(2), p2 = dist(3), k3 = dist(4);
+
+  // radial distorsion
+  res(0) = undistortedPoint(0) * (1. + k1*r2 + k2*r2*r2 + k3*r2*r2*r2);
+  res(1) = undistortedPoint(1) * (1. + k1*r2 + k2*r2*r2 + k3*r2*r2*r2);
+
+  // tangential distorsion
+  res(0) += 2.*p1*undistortedPoint(1)*undistortedPoint(0) + p2*(r2 + 2.*undistortedPoint(0)*undistortedPoint(0));
+  res(1) += p1*(r2 + 2.*undistortedPoint(1)*undistortedPoint(1)) + 2.*p2*undistortedPoint(0)*undistortedPoint(1);
+
+  // ideal coordinates => actual coordinates
+  res(0) = res(0)*K(0,0) + K(0,2);
+  res(1) = res(1)*K(1,1) + K(1,2);
+  
+  return res;
 }

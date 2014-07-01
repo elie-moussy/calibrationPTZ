@@ -18,22 +18,16 @@
 #include <string>
 #include <sstream>
 
-#define TX_CAM1 3375
-#define TX_CAM2 420
-#define TY_CAM1 2450
-#define TY_CAM2 2450
-#define TZ_CAM1 (-4750)
-#define TZ_CAM2 3736.5
 #define FRAME_WIDTH 704
 #define FRAME_HEIGHT 576
-#define DIST_TO_000_CAM1 -7282.35//-6321.05
-#define DIST_TO_000_CAM2 7324.94//5447.48
-#define DIST_TO_0500_CAM1 -7106.97//-5848.34
-#define DIST_TO_0500_CAM2 7441.01//6178.59
-#define DIST_TO_0050_CAM1 -7704.14//-5824.3
-#define DIST_TO_0050_CAM2 7827.02//5179.29
-#define DIST_TO_001_CAM1 -6731.05//-5901.06
-#define DIST_TO_001_CAM2 6588.10//5076.91
+#define DIST_TO_000_CAM1 -7282.35
+#define DIST_TO_000_CAM2 5447.48
+#define DIST_TO_0500_CAM1 -7106.97
+#define DIST_TO_0500_CAM2 6180.59
+#define DIST_TO_0050_CAM1 -7704.14
+#define DIST_TO_0050_CAM2 5179.29
+#define DIST_TO_001_CAM1 -6731.05
+#define DIST_TO_001_CAM2 5000.91
 
 static struct mousedata
 {
@@ -85,7 +79,8 @@ public:
   void computeRtMatrix(double pan, double tilt, cv::Mat image);
   void changePanTilt(double pan, double tilt);
   void getCameraPointFrom3d(Eigen::Vector3d realP, double &x, double &y, double &z);
-  double getDistanceToPoint(cv::Point2f p);
+  Eigen::Vector3d undistortPoint(Eigen::Vector3d distortedPoint);
+  Eigen::Vector3d distortPoint(Eigen::Vector3d undistortedPoint);
 
 private:
   int cam;
@@ -96,6 +91,8 @@ private:
   Eigen::Vector3d translation;
   Eigen::Matrix3d K;
   Eigen::Matrix3d rotation;
+  Eigen::Matrix3d H;
+  Eigen::VectorXd dist;
 };
 
 #endif //EXTRINSICPARAM_H_INCLUDED
