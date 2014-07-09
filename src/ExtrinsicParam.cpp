@@ -4,8 +4,97 @@
 ***************************************/
 
 #include "calibrationPTZ/ExtrinsicParam.hh"
+#include <fstream>
 
 #define PI 3.14159265
+
+//\fn template<typename matrix> bool fprintMatrix(matrix m, std::string name);
+///\brief Print an Eigen matrix in a file.
+///\param m The Eigen matrix.
+///\param name The file name.
+template<typename matrix>
+bool fprintMatrix(matrix m, std::string name)  
+{  
+  ofstream stream(name.c_str());
+  if (stream)
+    {
+      int i,j;
+      for(i=0; i< m.rows(); ++i)  
+	{  
+	  for(j=0; j< m.cols(); ++j)  
+	    {  
+	      stream << m(i,j) << " ";   
+	    }  
+	  stream << std::endl;  
+	}
+      stream.close();
+      return true;
+    }
+  return false;
+}
+
+//\fn template<typename matrix> bool freadMatrix(matrix &m, std::string name);
+///\brief Read an Eigen matrix from a file.
+///\param m The Eigen matrix.
+///\param name The file name.
+template<typename matrix>
+bool freadMatrix(matrix &m, std::string name)  
+{  
+  ifstream stream(name.c_str());
+  if (stream)
+    {
+      int i,j;
+      for(i=0; i< m.rows(); ++i)  
+	{  
+	  for(j=0; j< m.cols(); ++j)  
+	    {  
+	      stream >> m(i,j);
+	      char c;
+	      stream.get(c);
+	    }
+	}
+      stream.close();
+      return true;
+    }
+  return false;
+}
+
+//\fn bool fprintPT(double pan, double tilt, std::string name);
+///\brief Print the values of pan and tilt in a file.
+///\param pan The value of pan.
+///\param tilt The value of tilt.
+///\param name The file name.
+bool fprintPT(double pan, double tilt, std::string name)
+{
+  ofstream stream(name.c_str());
+  if (stream)
+    {
+      stream << pan << " " << tilt;
+      stream.close();
+      return true;
+    }
+  return false;
+}
+
+//\fn bool freadPT(double &pan, double &tilt, std::string name);
+///\brief Read the values of pan and tilt from a file.
+///\param pan The value of pan.
+///\param tilt The value of tilt.
+///\param name The file name.
+bool freadPT(double &pan, double &tilt, std::string name)
+{
+  ifstream stream(name.c_str());
+  if (stream)
+    {
+      stream >> pan;
+      char c;
+      stream.get(c);
+      stream >> tilt;
+      stream.close();
+      return true;
+    }
+  return false;
+}
 
 //\fn ExtrinsicParam::ExtrinsicParam(int cam);
 ///\brief The constructor of the class "ExtrinsicParam".
@@ -15,10 +104,12 @@ ExtrinsicParam::ExtrinsicParam(int cam):
   tilt(0.),
   rotation_computed(false)
 {
+  bool readingFile = true;
   this->cam = cam;
-  calib = new Calibration(cam);
   dist.resize(5);
   K.setZero();
+  rotation.setZero();
+  translation.setZero();
   if (cam == 2)
     {
       K(0,0) = 800;
@@ -31,6 +122,21 @@ ExtrinsicParam::ExtrinsicParam(int cam):
 	-0.013891,
 	-0.003838,
 	0.267853;
+      if(!freadMatrix(rotation, "rotation_cam2.txt"))
+	{
+	  std::cout << "Error reading file rotation_cam2.txt" << std::endl;
+	  readingFile = false;
+	}
+      if(!freadMatrix(translation, "translation_cam2.txt"))
+	{
+	  std::cout << "Error reading file translation_cam2.txt" << std::endl;
+	  readingFile = false;
+	}
+      if(!freadPT(pan,tilt, "PT_cam2.txt"))
+	{
+	  std::cout << "Error reading file PT_cam2.txt" << std::endl;
+	  readingFile = false;
+	}
     } else if (cam == 1)
     {
       K(0,0) = 800;
@@ -43,16 +149,35 @@ ExtrinsicParam::ExtrinsicParam(int cam):
 	0.001123,
 	0.001457,
 	-0.043746;
+      if(!freadMatrix(rotation, "rotation_cam1.txt"))
+	{
+	  std::cout << "Error reading file rotation_cam1.txt" << std::endl;
+	  readingFile = false;
+	}
+      if(!freadMatrix(translation, "translation_cam1.txt"))
+	{
+	  std::cout << "Error reading file translation_cam1.txt" << std::endl;
+	  readingFile = false;
+	}
+      if(!freadPT(pan,tilt, "PT_cam1.txt"))
+	{
+	  std::cout << "Error reading file PT_cam1.txt" << std::endl;
+	  readingFile = false;
+	}
     }
-  rotation.setZero();
-  translation.setZero();
+  initial_rotation.noalias() = rotation;
+  initial_translation.noalias() = translation;
+  rotation_computed = readingFile;
+  std::cout << "rotation=\n" << rotation << std::endl;
+  std::cout << "translation=\n" << translation << std::endl;
+  std::cout << "pan=" << pan << "\ttilt=" << tilt << std::endl;
 }
 
 //\fn ExtrinsicParam::~ExtrinsicParam();
 ///\brief The destructor of the class "ExtrinsicParam".
 ExtrinsicParam::~ExtrinsicParam()
 {
-  delete calib;
+  //delete calib;
 }
 
 //\fn Eigen::Vector3d ExtrinsicParam::getTranslationVector();
@@ -102,6 +227,12 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
   double u, v, x, y;
   double dist_to_point;
 
+  Eigen::MatrixXd Pr, Pi;
+  Pr.resize(4,6);
+  Pr.setZero();
+  Pi.resize(3,6);
+  Pi.setZero();
+
   pp.cnt = 0;
 
   // Create a window of the scene
@@ -111,8 +242,8 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
   cv::imshow("Extrinsic Image", img);
   cv::waitKey(10);
 
-  // We need 4 points to compute the translation vector and the rotation matrix
-  while (pp.cnt <= 4)
+  // We need 6 points to compute the translation vector and the rotation matrix
+  while (pp.cnt <= 6)
     {
       if (cnt > pp.cnt) // Case where we do a right click in order to remove the last point inserted
 	{
@@ -140,7 +271,7 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
 		cv::circle(img,pp.p1[0],3,cv::Scalar(255,0,0));
 		cv::putText(img,"(0,0,0)",pp.p1[0],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
 		cv::circle(img,pp.p1[1],3,cv::Scalar(255,0,0));
-		cv::putText(img,"(0.5,0,0)",pp.p1[1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::putText(img,"(1.5,0,0)",pp.p1[1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
 		cnt = pp.cnt;
 	      }
 	      break;
@@ -151,9 +282,41 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
 		cv::circle(img,pp.p1[0],3,cv::Scalar(255,0,0));
 		cv::putText(img,"(0,0,0)",pp.p1[0],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
 		cv::circle(img,pp.p1[1],3,cv::Scalar(255,0,0));
-		cv::putText(img,"(0.5,0,0)",pp.p1[1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::putText(img,"(1.5,0,0)",pp.p1[1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
 		cv::circle(img,pp.p1[2],3,cv::Scalar(255,0,0));
-		cv::putText(img,"(0,0.5,0)",pp.p1[2],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::putText(img,"(0,1.5,0)",pp.p1[2],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cnt = pp.cnt;
+	      }
+	      break;
+
+	    case 5:
+	      {
+		img = image.clone();
+		cv::circle(img,pp.p1[0],3,cv::Scalar(255,0,0));
+		cv::putText(img,"(0,0,0)",pp.p1[0],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::circle(img,pp.p1[1],3,cv::Scalar(255,0,0));
+		cv::putText(img,"(1.5,0,0)",pp.p1[1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::circle(img,pp.p1[2],3,cv::Scalar(255,0,0));
+		cv::putText(img,"(0,1.5,0)",pp.p1[2],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::circle(img,pp.p1[3],3,cv::Scalar(255,0,0));
+		cv::putText(img,"(0,0,1)",pp.p1[3],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cnt = pp.cnt;
+	      }
+	      break;
+
+	    case 6:
+	      {
+		img = image.clone();
+		cv::circle(img,pp.p1[0],3,cv::Scalar(255,0,0));
+		cv::putText(img,"(0,0,0)",pp.p1[0],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::circle(img,pp.p1[1],3,cv::Scalar(255,0,0));
+		cv::putText(img,"(1.5,0,0)",pp.p1[1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::circle(img,pp.p1[2],3,cv::Scalar(255,0,0));
+		cv::putText(img,"(0,1.5,0)",pp.p1[2],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::circle(img,pp.p1[3],3,cv::Scalar(255,0,0));
+		cv::putText(img,"(0,0,1)",pp.p1[3],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+		cv::circle(img,pp.p1[4],3,cv::Scalar(255,0,0));
+		cv::putText(img,"(1.5,0,1)",pp.p1[4],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
 		cnt = pp.cnt;
 	      }
 	      break;
@@ -172,8 +335,12 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
 	    {
 	      cv::putText(img,"(0,0,0)",pp.p1[pp.cnt-1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
 	      // Get the image coordinates
-	      u = (pp.p1[0].x - cx)/fx;
-	      v = (pp.p1[0].y - cy)/fy;
+	      u = pp.p1[0].x;
+	      v = pp.p1[0].y;
+	      Eigen::Vector3d undist;
+	      undist(0) = u;
+	      undist(1) = v;
+	      undist(2) = 1.;
 	      
 	      // Get the distance between the camera and the 3d point (the scale s)
 	      if (cam == 1)
@@ -184,17 +351,20 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
 		{
 		  dist_to_point= DIST_TO_000_CAM2;
 		}
-	      
-	      // The first point inserted will help to compute the translation vector
-	      translation(0) = (u)*(dist_to_point);
-	      translation(1) = (v)*(dist_to_point);
-	      translation(2) = dist_to_point;
+	      Pi(0,0) = u*dist_to_point;
+	      Pi(1,0) = v*dist_to_point;
+	      Pi(2,0) = dist_to_point;
+	      Pr(3,0) = 1.;
 
 	    } else if (pp.cnt == 2) // Second point to insert (500mm,0,0) (on the mocap basis)
 	    {
-	      cv::putText(img,"(0.5,0,0)",pp.p1[pp.cnt-1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
-	      u = (pp.p1[1].x - cx)/fx;
-	      v = (pp.p1[1].y - cy)/fy;
+	      cv::putText(img,"(1.5,0,0)",pp.p1[pp.cnt-1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+	      u = pp.p1[1].x;
+	      v = pp.p1[1].y;
+	      Eigen::Vector3d undist;
+	      undist(0) = u;
+	      undist(1) = v;
+	      undist(2) = 1.;
 	      
 	      if (cam == 1)
 		{
@@ -208,15 +378,21 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
 	      x = (u)*(dist_to_point);
 	      y = (v)*(dist_to_point);
 
-	      rotation(0,0) = (x - translation(0)) / 500.;
-	      rotation(1,0) = (y - translation(1)) / 500.;
-	      rotation(2,0) = (dist_to_point - translation(2)) / 500.;
+	      Pi(0,1) = x;
+	      Pi(1,1) = y;
+	      Pi(2,1) = dist_to_point;
+	      Pr(0,1) = 1500.;
+	      Pr(3,1) = 1.;
 
 	    } else if (pp.cnt == 3) // Third point to insert (0,500mm,0) (on the mocap basis)
 	    {
-	      cv::putText(img,"(0,0.5,0)",pp.p1[pp.cnt-1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
-	      u = (pp.p1[2].x - cx)/fx;
-	      v = (pp.p1[2].y - cy)/fy;
+	      cv::putText(img,"(0,1.5,0)",pp.p1[pp.cnt-1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+	      u = pp.p1[2].x;
+	      v = pp.p1[2].y;
+	      Eigen::Vector3d undist;
+	      undist(0) = x;
+	      undist(1) = y;
+	      undist(2) = 1.;
 	      
 	      if (cam == 1)
 		{
@@ -228,16 +404,21 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
 		}
 	      x = (u)*(dist_to_point);
 	      y = (v)*(dist_to_point);
-
-	      rotation(0,1) = (x - translation(0)) / 500.;
-	      rotation(1,1) = (y - translation(1)) / 500.;
-	      rotation(2,1) = (dist_to_point - translation(2)) / 500.;
+	      Pi(0,2) = x;
+	      Pi(1,2) = y;
+	      Pi(2,2) = dist_to_point;
+	      Pr(1,2) = 1500.;
+	      Pr(3,2) = 1.;
 
 	    } else if (pp.cnt == 4) // Fourth point to insert (0,0,1000mm) (on the mocap basis)
 	    {
 	      cv::putText(img,"(0,0,1)",pp.p1[pp.cnt-1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
-	      u = (pp.p1[3].x - cx)/fx;
-	      v = (pp.p1[3].y - cy)/fy;
+	      u = pp.p1[3].x;
+	      v = pp.p1[3].y;
+	      Eigen::Vector3d undist;
+	      undist(0) = u;
+	      undist(1) = v;
+	      undist(2) = 1.;
 	      
 	      if (cam == 1)
 		{
@@ -251,9 +432,67 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
 	      x = (u)*(dist_to_point);
 	      y = (v)*(dist_to_point);
 
-	      rotation(0,2) = (x - translation(0)) / 1000.;
-	      rotation(1,2) = (y - translation(1)) / 1000.;
-	      rotation(2,2) = ((dist_to_point) - translation(2)) / 1000.;
+	      Pi(0,3) = x;
+	      Pi(1,3) = y;
+	      Pi(2,3) = dist_to_point;
+	      Pr(2,3) = 1000.;
+	      Pr(3,3) = 1.;
+	    }else if (pp.cnt == 5) // Fifth point to insert (1500mm,0,1000mm) (on the mocap basis)
+	    {
+	      cv::putText(img,"(1.5,0,1)",pp.p1[pp.cnt-1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+	      u = pp.p1[4].x;
+	      v = pp.p1[4].y;
+	      Eigen::Vector3d undist;
+	      undist(0) = u;
+	      undist(1) = v;
+	      undist(2) = 1.;
+	      
+	      if (cam == 1)
+		{
+		  dist_to_point = 4856.439;
+		}
+	      if (cam == 2)
+		{
+		  dist_to_point = 6333.64;
+		}
+
+	      x = (u)*(dist_to_point);
+	      y = (v)*(dist_to_point);
+
+	      Pi(0,4) = x;
+	      Pi(1,4) = y;
+	      Pi(2,4) = dist_to_point;
+	      Pr(0,4) = 1500.;
+	      Pr(2,4) = 1000.;
+	      Pr(3,4) = 1.;
+	    }else if (pp.cnt == 6) // sixth point to insert (0,1500mm,1000mm) (on the mocap basis)
+	    {
+	      cv::putText(img,"(0,1.5,1)",pp.p1[pp.cnt-1],CV_FONT_HERSHEY_PLAIN|CV_FONT_ITALIC,1,cv::Scalar(255,0,0));
+	      u = pp.p1[5].x;
+	      v = pp.p1[5].y;
+	      Eigen::Vector3d undist;
+	      undist(0) = u;
+	      undist(1) = v;
+	      undist(2) = 1.;
+	      
+	      if (cam == 1)
+		{
+		  dist_to_point = 5142.713;
+		}
+	      if (cam == 2)
+		{
+		  dist_to_point = 4389.19;
+		}
+
+	      x = (u)*(dist_to_point);
+	      y = (v)*(dist_to_point);
+
+	      Pi(0,5) = x;
+	      Pi(1,5) = y;
+	      Pi(2,5) = dist_to_point;
+	      Pr(1,5) = 1500.;
+	      Pr(2,5) = 1000.;
+	      Pr(3,5) = 1.;
 	    }
 	  cnt = pp.cnt;
 	  pp.clicked = false;
@@ -263,6 +502,39 @@ void ExtrinsicParam::computeRtMatrix(double pan, double tilt, cv::Mat image)
       cv::waitKey(10);
     }
 
+  // Compute the rotation matrix and the translation vector
+  Eigen::MatrixXd Prinv, Rt;
+  pseudoInverse(Pr,Prinv);
+  Rt.noalias() = (K.inverse())*Pi*(Prinv);
+
+  rotation(0,0) = Rt(0,0);rotation(0,1) = Rt(0,1);rotation(0,2) = Rt(0,2);
+  rotation(1,0) = Rt(1,0);rotation(1,1) = Rt(1,1);rotation(1,2) = Rt(1,2);
+  rotation(2,0) = Rt(2,0);rotation(2,1) = Rt(2,1);rotation(2,2) = Rt(2,2);
+  translation(0) = Rt(0,3);
+  translation(1) = Rt(1,3);
+  translation(2) = Rt(2,3);
+
+  // Save the values in files
+  if (cam == 1)
+    {
+      if (!fprintMatrix(rotation, "rotation_cam1.txt"))
+	std::cout << "Error writing in rotation_cam1.txt" << std::endl;
+      if (!fprintMatrix(translation, "translation_cam1.txt"))
+	std::cout << "Error writing in rotation_cam1.txt" << std::endl;
+      if(!fprintPT(pan,tilt, "PT_cam1.txt"))
+	std::cout << "Error writing file PT_cam1.txt" << std::endl;
+    } else if (cam == 2)
+    {
+      if (!fprintMatrix(rotation, "rotation_cam2.txt"))
+	std::cout << "Error writing in rotation_cam2.txt" << std::endl;
+      if (!fprintMatrix(translation, "translation_cam2.txt"))
+	std::cout << "Error writing in rotation_cam2.txt" << std::endl;
+      if(!fprintPT(pan,tilt, "PT_cam2.txt"))
+	std::cout << "Error writing file PT_cam2.txt" << std::endl;
+    }
+
+  initial_rotation.noalias() = rotation;
+  initial_translation.noalias() = translation;
   rotation_computed = true;
 
   // Destroy the window
@@ -290,13 +562,21 @@ void ExtrinsicParam::changePanTilt(double pan, double tilt)
   Ry(2,0) = -sin((-(pan-this->pan))*PI/180.);
   Ry(2,2) = cos((-(pan-this->pan))*PI/180.);
 
+  Eigen::Vector3d Tx, Ty;
+  Tx.setZero();
+  Ty.setZero();
+  Tx(0) = 2*3.3*sin(0.5*(this->pan-pan)*PI/180.)*cos(0.5*(this->pan-pan)*PI/180.);
+  Tx(2) = -2*3.3*sin(0.5*(this->pan-pan)*PI/180.)*cos((90.-0.5*(this->pan-pan))*PI/180.);
+  Ty(1) = 2*3.3*sin(0.5*(this->tilt-tilt)*PI/180.)*cos(0.5*(this->tilt-tilt)*PI/180.);
+  Ty(2) = -2*3.3*sin(0.5*(this->tilt-tilt)*PI/180.)*cos((90.-0.5*(this->tilt-tilt))*PI/180.);
+
   // Compute the new values of the extrinsic parameters
   Eigen::Matrix4d Rx1, Ry1, Rt;
-  Rt << rotation, translation,
+  Rt << initial_rotation, initial_translation,
     0,0,0,1;
-  Rx1 << Rx, Eigen::Vector3d::Zero(),
+  Rx1 << Rx, Tx,
     0,0,0,1;
-  Ry1 << Ry, Eigen::Vector3d::Zero(),
+  Ry1 << Ry, Ty,
     0,0,0,1;
   Rt.noalias() = Rx1*Ry1*Rt;
   rotation(0,0) = Rt(0,0);rotation(0,1) = Rt(0,1);rotation(0,2) = Rt(0,2);
@@ -304,6 +584,7 @@ void ExtrinsicParam::changePanTilt(double pan, double tilt)
   rotation(2,0) = Rt(2,0);rotation(2,1) = Rt(2,1);rotation(2,2) = Rt(2,2);
   translation(0) = Rt(0,3);
   translation(1) = Rt(1,3);
+  translation(2) = Rt(2,3);
 }
 
 //\fn void ExtrinsicParam::getCameraPointFrom3d(Eigen::Vector3d realP, double &x, double &y, double &z);
@@ -325,11 +606,12 @@ void ExtrinsicParam::getCameraPointFrom3d(Eigen::Vector3d realP, double &x, doub
   imgP.noalias() = K*Rt*real;
   z = imgP(2);
   imgP.noalias() = imgP/imgP(2);
-  imgP.noalias() = undistortPoint(imgP);
-  imgP(0) = imgP(0)*fx + cx;
-  imgP(1) = imgP(1)*fy + cy;
-  x = imgP(0);
-  y = imgP(1);
+  Eigen::Vector3d temp = imgP;
+  temp(0) = (temp(0)-cx)/fx;
+  temp(1) = (temp(1)-cy)/fy;
+  temp.noalias() = distortPoint(temp);
+  x = temp(0);
+  y = temp(1);
 }
 
 //\fn Eigen::Vector3d ExtrinsicParam::undistortPoint(Eigen::Vector3d distortedPoint);
@@ -399,4 +681,99 @@ Eigen::Vector3d ExtrinsicParam::distortPoint(Eigen::Vector3d undistortedPoint)
   res(1) = res(1)*K(1,1) + K(1,2);
   
   return res;
+}
+
+//\fn Eigen::Vector4d triangulate(Point2f p1, Point2f p2, ExtrinsicParam e1, ExtrinsicParam e2);
+///\brief This function triangulate a point in 3D.
+///\param p1 The first point detected on the first image (cam1).
+///\param p2 The second point detected on the second image (cam 2).
+///\param e1 The first extrinsic object (cam1).
+///\param e2 The second extrinsic object (cam2).
+///\return The value of the triangulated point.
+Eigen::Vector4d triangulate(cv::Point2f p1, cv::Point2f p2, ExtrinsicParam e1, ExtrinsicParam e2)
+{
+  std::cout << "p1 = " << p1 << "\tp2 = " << p2 << std::endl;
+  Eigen::Matrix3d K = e1.getCameraMatrix(), K1 = e2.getCameraMatrix();
+  Eigen::MatrixXd Rt, Rt1;
+  Rt.resize(3,4);
+  Rt << e1.getRotationMatrix(), e1.getTranslationVector();
+  Rt1.resize(3,4);
+  Rt1 << e2.getRotationMatrix(), e2.getTranslationVector();
+  Eigen::MatrixXd KRt, KRt1;
+  KRt.noalias() = K*Rt;
+  KRt1.noalias() = K1*Rt1;
+  double p1x = (p1.x-K(0,2))/K(0,0);
+  double p2x = (p2.x-K1(0,2))/K1(0,0);
+  double p1y = (p1.y-K(1,2))/K(1,1);
+  double p2y = (p2.y-K1(1,2))/K1(1,1);
+  Eigen::VectorXd dist, dist1;
+  dist.resize(5);
+  dist1.resize(5);
+  dist << -0.133553,
+    0.078593,
+    0.001123,
+    0.001457,
+    -0.043746;
+  dist1 << -0.113323,
+	-0.023496,
+	-0.013891,
+	-0.003838,
+	0.267853;
+  double r2 = (p1x)*(p1x) + (p1y)*(p1y);
+  double xu1 = (p1x)*(1+dist(0)*r2+dist(1)*r2*r2+dist(4)*r2*r2*r2) + dist(2)*2*(p1x)*(p1y) + dist(3)*(r2+2*(p1x)*(p1x));
+  double yu1 = (p1y)*(1+dist(0)*r2+dist(1)*r2*r2+dist(4)*r2*r2*r2) + dist(3)*2*(p1x)*(p1y) + dist(2)*(r2+2*(p1y)*(p1y));
+  r2 = (p2x)*(p2x) + (p2y)*(p2y);
+  double xu2 = (p2x)*(1+dist(0)*r2+dist(1)*r2*r2+dist(4)*r2*r2*r2) + dist(2)*2*(p2x)*(p2y) + dist(3)*(r2+2*(p2x)*(p2x));
+  double yu2 = (p2y)*(1+dist(0)*r2+dist(1)*r2*r2+dist(4)*r2*r2*r2) + dist(3)*2*(p2x)*(p2y) + dist(2)*(r2+2*(p2y)*(p2y));
+  //std::cout << "xu1=" << xu1 << "\tyu1=" << yu1 << std::endl;
+  Eigen::Vector3d P1, P2;
+  P1(0) = p1.x;
+  P1(1) = p1.y;
+  P1(2) = 1.;
+  P2(0) = p2.x;
+  P2(1) = p2.y;
+  P2(2) = 1.;
+  P1.noalias() = e1.undistortPoint(P1);
+  P2.noalias() = e2.undistortPoint(P2);
+  
+  Eigen::Matrix4d A;
+  /*A << (xu1)*Rt.row(2) - Rt.row(0),
+    (yu1)*Rt.row(2) - Rt.row(1),
+    (xu2)*Rt1.row(2) - Rt1.row(0),
+    (yu2)*Rt1.row(2) - Rt1.row(1);*/
+  A << (P1(0))*Rt.row(2) - Rt.row(0),
+    (P1(1))*Rt.row(2) - Rt.row(1),
+    (P2(0))*Rt1.row(2) - Rt1.row(0),
+    (P2(1))*Rt1.row(2) - Rt1.row(1);
+  Eigen::Matrix4d At, AtA;
+  At.noalias() = A.transpose();
+  AtA.noalias() = At*A;
+  Eigen::MatrixXd AInv;
+  pseudoInverse(A,AInv);
+  Eigen::EigenSolver<Eigen::Matrix4d> es(AtA);
+  double init = false;
+  Eigen::Vector4d min;
+  double indexOfMin;
+  for (int i=0; i < es.eigenvectors().cols(); i++)
+    {
+      if (es.eigenvectors().col(i).imag().isApprox(Eigen::Vector4d::Zero()))
+	{
+	  Eigen::Vector4d real = es.eigenvectors().col(i).real();
+	  double one = real(3);
+	  real = (1./one)*real;
+	  if (!init)
+	    {
+	      min.noalias() = real;
+	      indexOfMin = i;
+	      init = true;
+	    }
+	  else if (es.eigenvalues()[i].real() < es.eigenvalues()[indexOfMin].real())
+	    {
+	      min.noalias() = real;
+	      indexOfMin = i;
+	    }
+	}
+    }
+  std::cout << "triangulated point =\n" << min << std::endl;
+  return min;
 }
